@@ -288,7 +288,6 @@ void HUD()
                     ctx.xmm0.f32[0] = (float)iCustomResY * fNativeAspect;
                 }
             });
-
     }
     else if (!HUDWidthScanResult)
     {
@@ -323,7 +322,6 @@ void HUD()
                     }
                 }
             });
-
     }
     else if (!MenuBackgroundsScanResult)
     {
@@ -358,7 +356,7 @@ void HUD()
         spdlog::error("HUD: HUD Scissor: Pattern scan failed.");
     }
 
-    // Minimap compass
+    // Minimap Compass
     uint8_t* MinimapCompassScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??  0F B7 ?? ?? 48 ?? ??");
     uint8_t* MinimapCompassNorthScanResult = Memory::PatternScan(baseModule, "48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? 0F 28 ?? ?? ?? ?? ?? ?? F3 44 ?? ?? ?? ??");
     if (MinimapCompassScanResult && MinimapCompassNorthScanResult)
@@ -395,7 +393,6 @@ void HUD()
                     ctx.xmm7.f32[0] = fHUDWidth;
                 }
             });
-
 
         static SafetyHookMid MinimapCompassNarrowMidHook{};
         MinimapCompassNarrowMidHook = safetyhook::create_mid(MinimapCompassScanResult,
@@ -461,7 +458,6 @@ void HUD()
                         *reinterpret_cast<float*>(ctx.rcx + 0x6F0) = (720.00f * fAspectRatio) - fWidthOffset;
                         *reinterpret_cast<float*>(ctx.rcx + 0x700) = (720.00f * fAspectRatio) - fWidthOffset;
                     }
-
                 }
             });
     }
@@ -612,7 +608,6 @@ void HUD()
                     ctx.xmm0.f32[0] = 1200.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f);
                 }
             });
-
     }
     else if (!BattleMarkersScanResult || !BattleMarkersEdgeFlipScanResult)
     {
@@ -650,7 +645,6 @@ void HUD()
                     ctx.xmm6.f32[0] = fAspectMultiplier;
                 }
             });
-
     }
     else if (!MovieTextureScanResult)
     {
@@ -804,7 +798,6 @@ DWORD __stdcall Main(void*)
     HUD();
     FOV();
     Graphics();
-    //FPSCap();
     return true; //end thread
 }
 
