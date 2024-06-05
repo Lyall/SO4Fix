@@ -19,7 +19,7 @@ This is a fix that adds custom resolutions, ultrawide support and more to STAR O
 
 ### Steam Deck/Linux Additional Instructions
 🚩**You do not need to do this if you are using Windows!**
-- Open up the game properties in Steam and add `WINEDLLOVERRIDES="wininet=n,b" %command%` to the launch options.
+- Open up the game properties in Steam and add `WINEDLLOVERRIDES="winmm=n,b" %command%` to the launch options.
 
 ## Configuration
 - See **SO4Fix.ini** to adjust settings for the fix.

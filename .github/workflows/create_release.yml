@@ -31,7 +31,7 @@ jobs:
     - run: unzip Ultimate-ASI-Loader_x64.zip -d .\; C:\msys64\usr\bin\wget.exe -O .\UltimateASILoader_LICENSE.md https://raw.githubusercontent.com/ThirteenAG/Ultimate-ASI-Loader/master/license
     - run: mkdir .\zip
     - run: cp ${{ github.event.repository.name }}.asi .\zip\; cp ${{ github.event.repository.name }}.ini .\zip\
-    - run: cp dinput8.dll .\zip\wininet.dll
+    - run: cp dinput8.dll .\zip\winmm.dll
     - run: cp UltimateASILoader_LICENSE.md .\zip\
     - run: New-Item -Path ".\zip\EXTRACT_TO_GAME_FOLDER" -ItemType File
     - run: cd .\zip\; 7z a -r -tzip ..\${{ github.event.repository.name }}_${{ github.event.inputs.version }}.zip .\*
