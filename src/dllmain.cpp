@@ -23,7 +23,7 @@ int iCustomResX;
 int iCustomResY;
 bool bBorderlessMode;
 bool bIntroSkip;
-bool bFixUI;
+bool bFixHUD;
 bool bFixFOV;
 bool bFixShadowBug;
 
@@ -102,7 +102,7 @@ void ReadConfig()
     inipp::get_value(ini.sections["Custom Resolution"], "Width", iCustomResX);
     inipp::get_value(ini.sections["Custom Resolution"], "Height", iCustomResY);
     inipp::get_value(ini.sections["Custom Resolution"], "Borderless", bBorderlessMode);
-    inipp::get_value(ini.sections["Fix UI"], "Enabled", bFixUI);
+    inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Fix Shadow Buffer Bug"], "Enabled", bFixShadowBug);
 
@@ -111,7 +111,7 @@ void ReadConfig()
     spdlog::info("Config Parse: iCustomResX: {}", iCustomResX);
     spdlog::info("Config Parse: iCustomResY: {}", iCustomResY);
     spdlog::info("Config Parse: bBorderlessMode: {}", bBorderlessMode);
-    spdlog::info("Config Parse: bFixUI: {}", bFixUI);
+    spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     spdlog::info("Config Parse: bFixShadowBug: {}", bFixShadowBug);
     spdlog::info("----------");
@@ -273,382 +273,385 @@ void Resolution()
 
 void HUD()
 {
-    // HUD Width
-    uint8_t* HUDWidthScanResult = Memory::PatternScan(baseModule, "0F B7 ?? ?? 66 0F ?? ?? 0F 5B ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? 75 ?? 48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??") + 0xB;
-    if (HUDWidthScanResult)
+    if (bFixHUD)
     {
-        spdlog::info("HUD: HUD Width: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDWidthScanResult - (uintptr_t)baseModule);
+        // HUD Width
+        uint8_t* HUDWidthScanResult = Memory::PatternScan(baseModule, "0F B7 ?? ?? 66 0F ?? ?? 0F 5B ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? 75 ?? 48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??") + 0xB;
+        if (HUDWidthScanResult)
+        {
+            spdlog::info("HUD: HUD Width: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDWidthScanResult - (uintptr_t)baseModule);
 
-        static SafetyHookMid HUDWidthMidHook{};
-        HUDWidthMidHook = safetyhook::create_mid(HUDWidthScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm0.f32[0] = (float)iCustomResY * fNativeAspect;
-                }
-            });
-    }
-    else if (!HUDWidthScanResult)
-    {
-        spdlog::error("HUD: HUD Width: Pattern scan failed.");
-    }
-
-    // Menu Backgrounds
-    uint8_t* MenuBackgroundsScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? F3 44 ?? ?? ?? ?? 0F ?? ?? 0A 73 ??");
-    if (MenuBackgroundsScanResult)
-    {
-        spdlog::info("HUD: Menu Backgrounds: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MenuBackgroundsScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid MenuBackgroundsMidHook{};
-        MenuBackgroundsMidHook = safetyhook::create_mid(MenuBackgroundsScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (ctx.rdi + 0x80)
-                {
-                    // Check for 1280x800 background
-                    if (*reinterpret_cast<float*>(ctx.rdi + 0x7C) == 1280.00f && *reinterpret_cast<float*>(ctx.rdi + 0x80) == 800.00f)
-                    {
-                        if (fAspectRatio > fNativeAspect)
-                        {
-                            *reinterpret_cast<float*>(ctx.rdi + 0x7C) = 720.00f * fAspectRatio;
-                            *reinterpret_cast<float*>(ctx.rdi + 0x18) = -(((720.00f * fAspectRatio) - 1280.00f) / 2.00f);
-                        }
-                        else if (fAspectRatio < 1.60f)
-                        {
-                            *reinterpret_cast<float*>(ctx.rdi + 0x80) = 1280.00f / fAspectRatio;
-                            *reinterpret_cast<float*>(ctx.rdi + 0x1C) = -(((1280.00f / fAspectRatio) - 720.00f) / 2.00f);
-                        }
-                    }
-                }
-            });
-    }
-    else if (!MenuBackgroundsScanResult)
-    {
-        spdlog::error("HUD: Menu Backgrounds: Pattern scan failed.");
-    }
-
-    // 2D Scissoring
-    uint8_t* HUDScissorScanResult = Memory::PatternScan(baseModule, "0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ?? F3 0F ?? ?? 0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ??") - 0x3;
-    if (HUDScissorScanResult)
-    {
-        spdlog::info("HUD: HUD Scissor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDScissorScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid HUDScissorMidHook{};
-        HUDScissorMidHook = safetyhook::create_mid(HUDScissorScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm2.f32[0] = fHUDWidth / 1280.00f;
-                    ctx.xmm8.f32[0] += ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
-                    ctx.xmm9.f32[0] += ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
-                }
-                else if (fAspectRatio < 1.60f)
-                {
-                    ctx.xmm6.f32[0] += ((1280.00f / fAspectRatio) - 720.00f) / 2.00f;
-                    ctx.xmm7.f32[0] += ((1280.00f / fAspectRatio) - 720.00f) / 2.00f;
-                }
-            });
-    }
-    else if (!HUDScissorScanResult)
-    {
-        spdlog::error("HUD: HUD Scissor: Pattern scan failed.");
-    }
-
-    // Minimap Compass
-    uint8_t* MinimapCompassScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??  0F B7 ?? ?? 48 ?? ??");
-    uint8_t* MinimapCompassNorthScanResult = Memory::PatternScan(baseModule, "48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? 0F 28 ?? ?? ?? ?? ?? ?? F3 44 ?? ?? ?? ??");
-    if (MinimapCompassScanResult && MinimapCompassNorthScanResult)
-    {
-        spdlog::info("HUD: Minimap Compass: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MinimapCompassScanResult - (uintptr_t)baseModule);
-        spdlog::info("HUD: Minimap Compass: North: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MinimapCompassScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid MinimapCompass1MidHook{};
-        MinimapCompass1MidHook = safetyhook::create_mid(MinimapCompassScanResult + 0x36,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm0.f32[0] = fHUDWidth / 1280.00f;
-                }
-            });
-
-        static SafetyHookMid MinimapCompass2MidHook{};
-        MinimapCompass2MidHook = safetyhook::create_mid(MinimapCompassScanResult + 0x9B,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm0.f32[0] = fHUDWidth / 1280.00f;
-                }
-            });
-
-        static SafetyHookMid MinimapCompass3MidHook{};
-        MinimapCompass3MidHook = safetyhook::create_mid(MinimapCompassScanResult + 0x10D,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm7.f32[0] = fHUDWidth;
-                }
-            });
-
-        static SafetyHookMid MinimapCompassNarrowMidHook{};
-        MinimapCompassNarrowMidHook = safetyhook::create_mid(MinimapCompassScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio < 1.60f)
-                {
-                    ctx.xmm7.f32[0] = ((1280.00f / fAspectRatio) - 720.00f) / 2.00f;
-                }
-            });
-
-        // North marker on compass
-        static SafetyHookMid MinimapCompassNorthMidHook{};
-        MinimapCompassNorthMidHook = safetyhook::create_mid(MinimapCompassNorthScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm6.f32[0] = -0.05f * fHUDWidth + 72.00f; // Not sure on how they calculated this, but this formula produces very similar results.
-                }
-            });
-    }
-    else if (!MinimapCompassScanResult)
-    {
-        spdlog::error("HUD: Minimap Compass: Pattern scan failed.");
-    }
-
-    // Fades
-    uint8_t* FadesScanResult = Memory::PatternScan(baseModule, "0F 57 ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? C7 ?? ?? ?? ?? ?? 00 00 80 3F") + 0x7;
-    if (FadesScanResult)
-    {
-        spdlog::info("HUD: Fades: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FadesScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid FadesMidHook{};
-        FadesMidHook = safetyhook::create_mid(FadesScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    float fWidthOffset = ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
-
-                    ctx.xmm1.f32[0] = 0.00f;
-                    ctx.xmm2.f32[0] = 720.00f;
-
-                    if (ctx.rcx + 0x6D0 && ctx.rcx + 6E0)
-                    {
-                        *reinterpret_cast<float*>(ctx.rcx + 0x6D0) = -fWidthOffset;
-                        *reinterpret_cast<float*>(ctx.rcx + 0x6E0) = -fWidthOffset;
-                    }
-                }
-            });
-
-        static SafetyHookMid FadesSizeMidHook{};
-        FadesSizeMidHook = safetyhook::create_mid(FadesScanResult + 0x70, // Big gap but this game ain't getting updates, so who cares?
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    float fWidthOffset = ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
-
-                    if (ctx.rcx + 0x6F0 && ctx.rcx + 0x700)
-                    {
-                        *reinterpret_cast<float*>(ctx.rcx + 0x6F0) = (720.00f * fAspectRatio) - fWidthOffset;
-                        *reinterpret_cast<float*>(ctx.rcx + 0x700) = (720.00f * fAspectRatio) - fWidthOffset;
-                    }
-                }
-            });
-    }
-    else if (!FadesScanResult)
-    {
-        spdlog::error("HUD: Fades: Pattern scan failed.");
-    }
-
-    // Battle Crossfades
-    uint8_t* BattleCrossfadesScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? F3 0F ?? ?? 66 0F ?? ?? F3 41 ?? ?? ?? 0F 5B ?? F3 0F ?? ?? ?? ?? F3 41 ?? ?? ??");
-    if (BattleCrossfadesScanResult)
-    {
-        spdlog::info("HUD: Battle Crossfades: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BattleCrossfadesScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid BattleCrossfadesMidHook{};
-        BattleCrossfadesMidHook = safetyhook::create_mid(BattleCrossfadesScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm3.f32[0] *= fAspectMultiplier;
-                }
-                else if (fAspectRatio < 1.60f)
-                {
-                    ctx.xmm3.f32[0] /= fAspectMultiplier;
-                }
-            });
-    }
-    else if (!BattleCrossfadesScanResult)
-    {
-        spdlog::error("HUD: Battle Crossfades: Pattern scan failed.");
-    }
-
-    // Markers (e.g. target markers, main menu cursor)
-    uint8_t* MarkersScanResult = Memory::PatternScan(baseModule, "0F 5B ?? F3 0F ?? ?? F3 0F ?? ?? 0F 28 ?? 0F 28 ?? F3 0F ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? ??") + 0x3;
-    if (MarkersScanResult)
-    {
-        spdlog::info("HUD: Markers: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MarkersScanResult - (uintptr_t)baseModule);
-
-        // >16:9
-        static SafetyHookMid MarkersWidth1MidHook{};
-        MarkersWidth1MidHook = safetyhook::create_mid(MarkersScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm0.f32[0] = fHUDWidth;
-                }
-            });
-
-        static SafetyHookMid MarkersWidth2MidHook{};
-        MarkersWidth2MidHook = safetyhook::create_mid(MarkersScanResult + 0x6C,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm1.f32[0] = fHUDWidth;
-                }
-            });
-
-        static SafetyHookMid MarkersOffsetMidHook{};
-        MarkersOffsetMidHook = safetyhook::create_mid(MarkersScanResult + 0x1C,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    ctx.xmm0.f32[0] -= ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
-                }
-            });
-
-        // <16:9
-        static SafetyHookMid MarkersNarrow1MidHook{};
-        MarkersNarrow1MidHook = safetyhook::create_mid(MarkersScanResult + 0x41,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio < 1.60f)
-                {
-                    ctx.rax = ctx.rcx;
-                }
-            });
-
-        static SafetyHookMid MarkersNarrow2MidHook{};
-        MarkersNarrow2MidHook = safetyhook::create_mid(MarkersScanResult + 0x4D,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio < 1.60f)
-                {
-                    ctx.xmm2.f32[0] += 40.00f;
-                    ctx.xmm2.f32[0] -= ((1280.00f / fAspectRatio) - 720.00f) / 2.00f; // 40.00f at 1920x1200 for example
-                }
-            });
-    }
-    else if (!MarkersScanResult)
-    {
-        spdlog::error("HUD: Markers: Pattern scan failed.");
-    }
-
-    // Allow battle markers to leave 16:9 boundary
-    uint8_t* BattleMarkersScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? 0F ?? ?? 77 ?? 0F ?? ?? ?? ?? ?? ?? 77 ??");
-    uint8_t* BattleMarkersEdgeFlipScanResult = Memory::PatternScan(baseModule, "7F ?? F3 0F ?? ?? ?? ?? ?? ?? 0F ?? ?? 76 ?? F3 0F ?? ??");
-    if (BattleMarkersScanResult && BattleMarkersEdgeFlipScanResult)
-    {
-        spdlog::info("HUD: Battle Markers Boundary: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BattleMarkersScanResult - (uintptr_t)baseModule);
-        spdlog::info("HUD: Battle Markers Edge Flip: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BattleMarkersEdgeFlipScanResult - (uintptr_t)baseModule);
-
-        // Left edge
-        static SafetyHookMid BattleMarkersLeft1MidHook{};
-        BattleMarkersLeft1MidHook = safetyhook::create_mid(BattleMarkersScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    // Set left side to 80 - the hud width offset.
-                    ctx.xmm3.f32[0] = 80.00f - (((720.00f * fAspectRatio) - 1280.00f) / 2.00f); // -80
-                }
-            });
-
-        static SafetyHookMid BattleMarkersLeft2MidHook{};
-        BattleMarkersLeft2MidHook = safetyhook::create_mid(BattleMarkersScanResult + 0xBB,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    // Set left side to 80 - the hud width offset.
-                    ctx.xmm1.f32[0] = 80.00f - (((720.00f * fAspectRatio) - 1280.00f) / 2.00f); // 80
-                }
-            });
-
-        // Need to grab the address for the right edge value as it's used in a comiss. Luckily it isn't used anywhere else.
-        BattleMarkerRightValue = Memory::GetAbsolute((uintptr_t)BattleMarkersScanResult + 0xE);
-
-        // Need to grab address for the marker flip at the right edge of the screen.
-        BattleMarkerFlipValue = Memory::GetAbsolute((uintptr_t)BattleMarkersEdgeFlipScanResult + 0x6);
-
-        // Right edge
-        static SafetyHookMid BattleMarkersRightMidHook{};
-        BattleMarkersRightMidHook = safetyhook::create_mid(BattleMarkersScanResult + 0xCD,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio > fNativeAspect)
-                {
-                    // Need to leave the 80px margin
-                    if (BattleMarkerRightValue && BattleMarkerFlipValue)
-                    {
-                        Memory::Write(BattleMarkerRightValue, 1280.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f));
-                        Memory::Write(BattleMarkerFlipValue, 900.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f));
-                    }
-                    ctx.xmm0.f32[0] = 1200.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f);
-                }
-            });
-    }
-    else if (!BattleMarkersScanResult || !BattleMarkersEdgeFlipScanResult)
-    {
-        spdlog::error("HUD: Battle Markers Boundary: Pattern scan failed.");
-    }
-
-    // Movies
-    uint8_t* MovieTextureScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? F3 0F ?? ?? F3 41 ?? ?? ?? 44 0F ?? ?? ?? ?? 0F 28 ??") + 0x5;
-    if (MovieTextureScanResult)
-    {
-        spdlog::info("HUD: Movie: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieTextureScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid MovieTextureMidHook{};
-        MovieTextureMidHook = safetyhook::create_mid(MovieTextureScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                if (ctx.rbx)
+            static SafetyHookMid HUDWidthMidHook{};
+            HUDWidthMidHook = safetyhook::create_mid(HUDWidthScanResult,
+                [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
                     {
-                        *reinterpret_cast<float*>(ctx.rbx) = -1.00f / fAspectMultiplier;
-                        *reinterpret_cast<float*>(ctx.rbx + 0x1C) = -1.00f / fAspectMultiplier;
-                        *reinterpret_cast<float*>(ctx.rbx + 0x38) = 1.00f / fAspectMultiplier;
-                        *reinterpret_cast<float*>(ctx.rbx + 0x54) = 1.00f / fAspectMultiplier;
+                        ctx.xmm0.f32[0] = (float)iCustomResY * fNativeAspect;
                     }
-                }
-            });
+                });
+        }
+        else if (!HUDWidthScanResult)
+        {
+            spdlog::error("HUD: HUD Width: Pattern scan failed.");
+        }
 
-        static SafetyHookMid MovieTextureNarrowMidHook{};
-        MovieTextureNarrowMidHook = safetyhook::create_mid(MovieTextureScanResult - 0x8C,
-            [](SafetyHookContext& ctx)
-            {
-                if (fAspectRatio < 1.60f)
+        // Menu Backgrounds
+        uint8_t* MenuBackgroundsScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? F3 44 ?? ?? ?? ?? 0F ?? ?? 0A 73 ??");
+        if (MenuBackgroundsScanResult)
+        {
+            spdlog::info("HUD: Menu Backgrounds: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MenuBackgroundsScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid MenuBackgroundsMidHook{};
+            MenuBackgroundsMidHook = safetyhook::create_mid(MenuBackgroundsScanResult,
+                [](SafetyHookContext& ctx)
                 {
-                    ctx.xmm6.f32[0] = fAspectMultiplier;
-                }
-            });
-    }
-    else if (!MovieTextureScanResult)
-    {
-        spdlog::error("HUD: Movie: Pattern scan failed.");
+                    if (ctx.rdi + 0x80)
+                    {
+                        // Check for 1280x800 background
+                        if (*reinterpret_cast<float*>(ctx.rdi + 0x7C) == 1280.00f && *reinterpret_cast<float*>(ctx.rdi + 0x80) == 800.00f)
+                        {
+                            if (fAspectRatio > fNativeAspect)
+                            {
+                                *reinterpret_cast<float*>(ctx.rdi + 0x7C) = 720.00f * fAspectRatio;
+                                *reinterpret_cast<float*>(ctx.rdi + 0x18) = -(((720.00f * fAspectRatio) - 1280.00f) / 2.00f);
+                            }
+                            else if (fAspectRatio < 1.60f)
+                            {
+                                *reinterpret_cast<float*>(ctx.rdi + 0x80) = 1280.00f / fAspectRatio;
+                                *reinterpret_cast<float*>(ctx.rdi + 0x1C) = -(((1280.00f / fAspectRatio) - 720.00f) / 2.00f);
+                            }
+                        }
+                    }
+                });
+        }
+        else if (!MenuBackgroundsScanResult)
+        {
+            spdlog::error("HUD: Menu Backgrounds: Pattern scan failed.");
+        }
+
+        // 2D Scissoring
+        uint8_t* HUDScissorScanResult = Memory::PatternScan(baseModule, "0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ?? F3 0F ?? ?? 0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ??") - 0x3;
+        if (HUDScissorScanResult)
+        {
+            spdlog::info("HUD: HUD Scissor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDScissorScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid HUDScissorMidHook{};
+            HUDScissorMidHook = safetyhook::create_mid(HUDScissorScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm2.f32[0] = fHUDWidth / 1280.00f;
+                        ctx.xmm8.f32[0] += ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
+                        ctx.xmm9.f32[0] += ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
+                    }
+                    else if (fAspectRatio < 1.60f)
+                    {
+                        ctx.xmm6.f32[0] += ((1280.00f / fAspectRatio) - 720.00f) / 2.00f;
+                        ctx.xmm7.f32[0] += ((1280.00f / fAspectRatio) - 720.00f) / 2.00f;
+                    }
+                });
+        }
+        else if (!HUDScissorScanResult)
+        {
+            spdlog::error("HUD: HUD Scissor: Pattern scan failed.");
+        }
+
+        // Minimap Compass
+        uint8_t* MinimapCompassScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??  0F B7 ?? ?? 48 ?? ??");
+        uint8_t* MinimapCompassNorthScanResult = Memory::PatternScan(baseModule, "48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? 0F 28 ?? ?? ?? ?? ?? ?? F3 44 ?? ?? ?? ??");
+        if (MinimapCompassScanResult && MinimapCompassNorthScanResult)
+        {
+            spdlog::info("HUD: Minimap Compass: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MinimapCompassScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Minimap Compass: North: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MinimapCompassScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid MinimapCompass1MidHook{};
+            MinimapCompass1MidHook = safetyhook::create_mid(MinimapCompassScanResult + 0x36,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm0.f32[0] = fHUDWidth / 1280.00f;
+                    }
+                });
+
+            static SafetyHookMid MinimapCompass2MidHook{};
+            MinimapCompass2MidHook = safetyhook::create_mid(MinimapCompassScanResult + 0x9B,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm0.f32[0] = fHUDWidth / 1280.00f;
+                    }
+                });
+
+            static SafetyHookMid MinimapCompass3MidHook{};
+            MinimapCompass3MidHook = safetyhook::create_mid(MinimapCompassScanResult + 0x10D,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm7.f32[0] = fHUDWidth;
+                    }
+                });
+
+            static SafetyHookMid MinimapCompassNarrowMidHook{};
+            MinimapCompassNarrowMidHook = safetyhook::create_mid(MinimapCompassScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio < 1.60f)
+                    {
+                        ctx.xmm7.f32[0] = ((1280.00f / fAspectRatio) - 720.00f) / 2.00f;
+                    }
+                });
+
+            // North marker on compass
+            static SafetyHookMid MinimapCompassNorthMidHook{};
+            MinimapCompassNorthMidHook = safetyhook::create_mid(MinimapCompassNorthScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm6.f32[0] = -0.05f * fHUDWidth + 72.00f; // Not sure on how they calculated this, but this formula produces very similar results.
+                    }
+                });
+        }
+        else if (!MinimapCompassScanResult)
+        {
+            spdlog::error("HUD: Minimap Compass: Pattern scan failed.");
+        }
+
+        // Fades
+        uint8_t* FadesScanResult = Memory::PatternScan(baseModule, "0F 57 ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? C7 ?? ?? ?? ?? ?? 00 00 80 3F") + 0x7;
+        if (FadesScanResult)
+        {
+            spdlog::info("HUD: Fades: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FadesScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid FadesMidHook{};
+            FadesMidHook = safetyhook::create_mid(FadesScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        float fWidthOffset = ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
+
+                        ctx.xmm1.f32[0] = 0.00f;
+                        ctx.xmm2.f32[0] = 720.00f;
+
+                        if (ctx.rcx + 0x6D0 && ctx.rcx + 6E0)
+                        {
+                            *reinterpret_cast<float*>(ctx.rcx + 0x6D0) = -fWidthOffset;
+                            *reinterpret_cast<float*>(ctx.rcx + 0x6E0) = -fWidthOffset;
+                        }
+                    }
+                });
+
+            static SafetyHookMid FadesSizeMidHook{};
+            FadesSizeMidHook = safetyhook::create_mid(FadesScanResult + 0x70, // Big gap but this game ain't getting updates, so who cares?
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        float fWidthOffset = ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
+
+                        if (ctx.rcx + 0x6F0 && ctx.rcx + 0x700)
+                        {
+                            *reinterpret_cast<float*>(ctx.rcx + 0x6F0) = (720.00f * fAspectRatio) - fWidthOffset;
+                            *reinterpret_cast<float*>(ctx.rcx + 0x700) = (720.00f * fAspectRatio) - fWidthOffset;
+                        }
+                    }
+                });
+        }
+        else if (!FadesScanResult)
+        {
+            spdlog::error("HUD: Fades: Pattern scan failed.");
+        }
+
+        // Battle Crossfades
+        uint8_t* BattleCrossfadesScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? F3 0F ?? ?? 66 0F ?? ?? F3 41 ?? ?? ?? 0F 5B ?? F3 0F ?? ?? ?? ?? F3 41 ?? ?? ??");
+        if (BattleCrossfadesScanResult)
+        {
+            spdlog::info("HUD: Battle Crossfades: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BattleCrossfadesScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid BattleCrossfadesMidHook{};
+            BattleCrossfadesMidHook = safetyhook::create_mid(BattleCrossfadesScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm3.f32[0] *= fAspectMultiplier;
+                    }
+                    else if (fAspectRatio < 1.60f)
+                    {
+                        ctx.xmm3.f32[0] /= fAspectMultiplier;
+                    }
+                });
+        }
+        else if (!BattleCrossfadesScanResult)
+        {
+            spdlog::error("HUD: Battle Crossfades: Pattern scan failed.");
+        }
+
+        // Markers (e.g. target markers, main menu cursor)
+        uint8_t* MarkersScanResult = Memory::PatternScan(baseModule, "0F 5B ?? F3 0F ?? ?? F3 0F ?? ?? 0F 28 ?? 0F 28 ?? F3 0F ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? ??") + 0x3;
+        if (MarkersScanResult)
+        {
+            spdlog::info("HUD: Markers: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MarkersScanResult - (uintptr_t)baseModule);
+
+            // >16:9
+            static SafetyHookMid MarkersWidth1MidHook{};
+            MarkersWidth1MidHook = safetyhook::create_mid(MarkersScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm0.f32[0] = fHUDWidth;
+                    }
+                });
+
+            static SafetyHookMid MarkersWidth2MidHook{};
+            MarkersWidth2MidHook = safetyhook::create_mid(MarkersScanResult + 0x6C,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm1.f32[0] = fHUDWidth;
+                    }
+                });
+
+            static SafetyHookMid MarkersOffsetMidHook{};
+            MarkersOffsetMidHook = safetyhook::create_mid(MarkersScanResult + 0x1C,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        ctx.xmm0.f32[0] -= ((720.00f * fAspectRatio) - 1280.00f) / 2.00f;
+                    }
+                });
+
+            // <16:9
+            static SafetyHookMid MarkersNarrow1MidHook{};
+            MarkersNarrow1MidHook = safetyhook::create_mid(MarkersScanResult + 0x41,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio < 1.60f)
+                    {
+                        ctx.rax = ctx.rcx;
+                    }
+                });
+
+            static SafetyHookMid MarkersNarrow2MidHook{};
+            MarkersNarrow2MidHook = safetyhook::create_mid(MarkersScanResult + 0x4D,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio < 1.60f)
+                    {
+                        ctx.xmm2.f32[0] += 40.00f;
+                        ctx.xmm2.f32[0] -= ((1280.00f / fAspectRatio) - 720.00f) / 2.00f; // 40.00f at 1920x1200 for example
+                    }
+                });
+        }
+        else if (!MarkersScanResult)
+        {
+            spdlog::error("HUD: Markers: Pattern scan failed.");
+        }
+
+        // Allow battle markers to leave 16:9 boundary
+        uint8_t* BattleMarkersScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? 0F ?? ?? 77 ?? 0F ?? ?? ?? ?? ?? ?? 77 ??");
+        uint8_t* BattleMarkersEdgeFlipScanResult = Memory::PatternScan(baseModule, "7F ?? F3 0F ?? ?? ?? ?? ?? ?? 0F ?? ?? 76 ?? F3 0F ?? ??");
+        if (BattleMarkersScanResult && BattleMarkersEdgeFlipScanResult)
+        {
+            spdlog::info("HUD: Battle Markers Boundary: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BattleMarkersScanResult - (uintptr_t)baseModule);
+            spdlog::info("HUD: Battle Markers Edge Flip: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BattleMarkersEdgeFlipScanResult - (uintptr_t)baseModule);
+
+            // Left edge
+            static SafetyHookMid BattleMarkersLeft1MidHook{};
+            BattleMarkersLeft1MidHook = safetyhook::create_mid(BattleMarkersScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        // Set left side to 80 - the hud width offset.
+                        ctx.xmm3.f32[0] = 80.00f - (((720.00f * fAspectRatio) - 1280.00f) / 2.00f); // -80
+                    }
+                });
+
+            static SafetyHookMid BattleMarkersLeft2MidHook{};
+            BattleMarkersLeft2MidHook = safetyhook::create_mid(BattleMarkersScanResult + 0xBB,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        // Set left side to 80 - the hud width offset.
+                        ctx.xmm1.f32[0] = 80.00f - (((720.00f * fAspectRatio) - 1280.00f) / 2.00f); // 80
+                    }
+                });
+
+            // Need to grab the address for the right edge value as it's used in a comiss. Luckily it isn't used anywhere else.
+            BattleMarkerRightValue = Memory::GetAbsolute((uintptr_t)BattleMarkersScanResult + 0xE);
+
+            // Need to grab address for the marker flip at the right edge of the screen.
+            BattleMarkerFlipValue = Memory::GetAbsolute((uintptr_t)BattleMarkersEdgeFlipScanResult + 0x6);
+
+            // Right edge
+            static SafetyHookMid BattleMarkersRightMidHook{};
+            BattleMarkersRightMidHook = safetyhook::create_mid(BattleMarkersScanResult + 0xCD,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio > fNativeAspect)
+                    {
+                        // Need to leave the 80px margin
+                        if (BattleMarkerRightValue && BattleMarkerFlipValue)
+                        {
+                            Memory::Write(BattleMarkerRightValue, 1280.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f));
+                            Memory::Write(BattleMarkerFlipValue, 900.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f));
+                        }
+                        ctx.xmm0.f32[0] = 1200.00f + (((720.00f * fAspectRatio) - 1280.00f) / 2.00f);
+                    }
+                });
+        }
+        else if (!BattleMarkersScanResult || !BattleMarkersEdgeFlipScanResult)
+        {
+            spdlog::error("HUD: Battle Markers Boundary: Pattern scan failed.");
+        }
+
+        // Movies
+        uint8_t* MovieTextureScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? F3 0F ?? ?? F3 41 ?? ?? ?? 44 0F ?? ?? ?? ?? 0F 28 ??") + 0x5;
+        if (MovieTextureScanResult)
+        {
+            spdlog::info("HUD: Movie: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieTextureScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid MovieTextureMidHook{};
+            MovieTextureMidHook = safetyhook::create_mid(MovieTextureScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (ctx.rbx)
+                    {
+                        if (fAspectRatio > fNativeAspect)
+                        {
+                            *reinterpret_cast<float*>(ctx.rbx) = -1.00f / fAspectMultiplier;
+                            *reinterpret_cast<float*>(ctx.rbx + 0x1C) = -1.00f / fAspectMultiplier;
+                            *reinterpret_cast<float*>(ctx.rbx + 0x38) = 1.00f / fAspectMultiplier;
+                            *reinterpret_cast<float*>(ctx.rbx + 0x54) = 1.00f / fAspectMultiplier;
+                        }
+                    }
+                });
+
+            static SafetyHookMid MovieTextureNarrowMidHook{};
+            MovieTextureNarrowMidHook = safetyhook::create_mid(MovieTextureScanResult - 0x8C,
+                [](SafetyHookContext& ctx)
+                {
+                    if (fAspectRatio < 1.60f)
+                    {
+                        ctx.xmm6.f32[0] = fAspectMultiplier;
+                    }
+                });
+        }
+        else if (!MovieTextureScanResult)
+        {
+            spdlog::error("HUD: Movie: Pattern scan failed.");
+        }
     }
 }
 
