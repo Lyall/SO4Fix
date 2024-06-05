@@ -30,7 +30,7 @@ This list will contain bugs which may or may not be fixed.
 
 ## Screenshots
 
-| ![ezgif-5-1e6ceee28a](https://github.com/Lyall/SO4Fix/assets/695941/56a657c2-8e19-40aa-b873-78ce1c5e3112) |
+| ![ezgif-5-d5b03862da](https://github.com/Lyall/SO4Fix/assets/695941/92d7ed94-cc13-4ebe-9d0a-b48d9ac1748d) |
 |:--:|
 | Gameplay |
 
