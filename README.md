@@ -15,7 +15,7 @@ This is a fix that adds custom resolutions, ultrawide support and more to STAR O
 
 ## Installation
 - Grab the latest release of SO4Fix from [here.](https://github.com/Lyall/SO4Fix/releases)
-- Extract the contents of the release zip in to the the game folder. e.g. "**steamapps\common\STAR OCEAN - THE LAST HOPE - 4K & Full HD Remaster**" for Steam).
+- Extract the contents of the release zip in to the the game folder. e.g. ("**steamapps\common\STAR OCEAN - THE LAST HOPE - 4K & Full HD Remaster**" for Steam).
 
 ### Steam Deck/Linux Additional Instructions
 🚩**You do not need to do this if you are using Windows!**
