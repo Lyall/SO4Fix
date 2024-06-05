@@ -1,5 +1,5 @@
 ﻿# Star Ocean - The Last Hope Fix
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01UAI9)</br>
+[![Patreon-Button](https://github.com/Lyall/SO4Fix/assets/695941/13b472d0-d1eb-4522-b57b-d9669b41e379)](https://www.patreon.com/Wintermance) [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/W7W01UAI9)<br />
 [![Github All Releases](https://img.shields.io/github/downloads/Lyall/SO4Fix/total.svg)](https://github.com/Lyall/SO4Fix/releases)
 
 This is a fix that adds custom resolutions, ultrawide support and more to STAR OCEAN - THE LAST HOPE - 4K & Full HD Remaster.
@@ -30,7 +30,7 @@ This list will contain bugs which may or may not be fixed.
 
 ## Screenshots
 
-|  |
+| ![ezgif-5-1e6ceee28a](https://github.com/Lyall/SO4Fix/assets/695941/56a657c2-8e19-40aa-b873-78ce1c5e3112) |
 |:--:|
 | Gameplay |
 
