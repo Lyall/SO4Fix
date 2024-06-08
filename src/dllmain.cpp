@@ -6,15 +6,18 @@
 #include <safetyhook.hpp>
 
 HMODULE baseModule = GetModuleHandle(NULL);
+HMODULE thisModule;
 
 // Ini parser setup
 inipp::Ini<char> ini;
+std::shared_ptr<spdlog::logger> logger;
 std::string sFixName = "SO4Fix";
 std::string sFixVer = "0.9.0";
 std::string sLogFile = "SO4Fix.log";
 std::string sConfigFile = "SO4Fix.ini";
 std::string sExeName;
 std::filesystem::path sExePath;
+std::filesystem::path sThisModulePath;
 std::pair DesktopDimensions = { 0,0 };
 
 // Ini variables
@@ -48,13 +51,39 @@ int iWindowMode = 0;
 
 void Logging()
 {
+    // Get this module path
+    WCHAR thisModulePath[_MAX_PATH] = { 0 };
+    GetModuleFileNameW(thisModule, thisModulePath, MAX_PATH);
+    sThisModulePath = thisModulePath;
+    sThisModulePath = sThisModulePath.remove_filename();
+
+    // Get game name and exe path
+    WCHAR exePath[_MAX_PATH] = { 0 };
+    GetModuleFileNameW(baseModule, exePath, MAX_PATH);
+    sExePath = exePath;
+    sExeName = sExePath.filename().string();
+    sExePath = sExePath.remove_filename();
+
     // spdlog initialisation
     {
         try
         {
-            auto logger = spdlog::basic_logger_mt(sFixName.c_str(), sLogFile, true);
+            logger = spdlog::basic_logger_st(sFixName.c_str(), sThisModulePath.string() + sLogFile, true);
             spdlog::set_default_logger(logger);
 
+            spdlog::flush_on(spdlog::level::debug);
+            spdlog::info("----------");
+            spdlog::info("{} v{} loaded.", sFixName.c_str(), sFixVer.c_str());
+            spdlog::info("----------");
+            spdlog::info("Path to logfile: {}", sThisModulePath.string() + sLogFile);
+            spdlog::info("----------");
+
+            // Log module details
+            spdlog::info("Module Name: {0:s}", sExeName.c_str());
+            spdlog::info("Module Path: {0:s}", sExePath.string());
+            spdlog::info("Module Address: 0x{0:x}", (uintptr_t)baseModule);
+            spdlog::info("Module Timestamp: {0:d}", Memory::ModuleTimestamp(baseModule));
+            spdlog::info("----------");
         }
         catch (const spdlog::spdlog_ex& ex)
         {
@@ -64,36 +93,24 @@ void Logging()
             std::cout << "Log initialisation failed: " << ex.what() << std::endl;
         }
     }
-
-    spdlog::flush_on(spdlog::level::debug);
-    spdlog::info("{} v{} loaded.", sFixName.c_str(), sFixVer.c_str());
-    spdlog::info("----------");
-
-    // Get game name and exe path
-    WCHAR exePath[_MAX_PATH] = { 0 };
-    GetModuleFileNameW(baseModule, exePath, MAX_PATH);
-    sExePath = exePath;
-    sExeName = sExePath.filename().string();
-
-    // Log module details
-    spdlog::info("Module Name: {0:s}", sExeName.c_str());
-    spdlog::info("Module Path: {0:s}", sExePath.string().c_str());
-    spdlog::info("Module Address: 0x{0:x}", (uintptr_t)baseModule);
-    spdlog::info("Module Timestamp: {0:d}", Memory::ModuleTimestamp(baseModule));
-    spdlog::info("----------");
 }
 
 void ReadConfig()
 {
     // Initialise config
-    std::ifstream iniFile(sConfigFile);
+    std::ifstream iniFile(sThisModulePath.string() + sConfigFile);
     if (!iniFile)
     {
-        spdlog::critical("Failed to load config file.");
-        spdlog::critical("Make sure {} is present in the game folder.", sConfigFile);
+        AllocConsole();
+        FILE* dummy;
+        freopen_s(&dummy, "CONOUT$", "w", stdout);
+        std::cout << "" << sFixName.c_str() << " v" << sFixVer.c_str() << " loaded." << std::endl;
+        std::cout << "ERROR: Could not locate config file." << std::endl;
+        std::cout << "ERROR: Make sure " << sConfigFile.c_str() << " is located in " << sThisModulePath.string().c_str() << std::endl;
     }
     else
     {
+        spdlog::info("Path to config file: {}", sThisModulePath.string() + sConfigFile);
         ini.parse(iniFile);
     }
 
@@ -156,6 +173,35 @@ void ReadConfig()
     spdlog::info("----------");
 }
 
+// SetWindowLongA Hook
+SafetyHookInline SetWindowLongA_hook{};
+LONG WINAPI SetWindowLongA_hooked(HWND hWnd, int nIndex, LONG dwNewLong)
+{
+    // Get window class name
+    char windowClassName[256];
+    GetClassNameA(hWnd, windowClassName, sizeof(windowClassName));
+
+    // Check if game is in windowed mode and that the class name is correct.
+    if (iWindowMode == 0 && !strcmp(windowClassName, sWindowClassName) && bBorderlessMode)
+    {
+        // Get window style
+        LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
+        LONG lExStyle = GetWindowLong(hWnd, GWL_EXSTYLE);
+
+        // Apply borderless style
+        lStyle &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZE | WS_MAXIMIZE | WS_SYSMENU);
+        lExStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+
+        SetWindowLong(hWnd, GWL_STYLE, lStyle);
+        SetWindowLong(hWnd, GWL_EXSTYLE, lExStyle);
+
+        // Maximize window and put window on top
+        SetWindowPos(hWnd, HWND_TOP, 0, 0, DesktopDimensions.first, DesktopDimensions.second, NULL);
+    }
+
+    return SetWindowLongA_hook.stdcall<LONG>(hWnd, nIndex, dwNewLong);
+}
+
 void IntroSkip()
 {
     // Intro Skip
@@ -176,40 +222,6 @@ void IntroSkip()
     {
         spdlog::error("Intro Skip: Pattern scan failed.");
     }
-}
-
-// CSetWindowLongA Hook
-SafetyHookInline SetWindowLongA_hook{};
-LONG WINAPI SetWindowLongA_hooked(HWND hWnd, int nIndex, LONG dwNewLong)
-{
-    auto windowLong = SetWindowLongA_hook.stdcall<LONG>(hWnd, nIndex, dwNewLong);
-
-    // Get window class name
-    char windowClassName[256];
-    GetClassNameA(hWnd, windowClassName, sizeof(windowClassName));
-
-    // Check if game is in windowed mode and that the class name is correct.
-    if (iWindowMode == 0 && !strcmp(windowClassName, sWindowClassName) && bBorderlessMode)
-    {
-        // Get window style
-        LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
-
-        // Check for borderless (WS_POPUP)
-        if ((lStyle & WS_POPUP) != WS_POPUP)
-        {
-            // Apply borderless style (WS_POPUP)
-            lStyle &= ~(WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
-            SetWindowLong(hWnd, GWL_STYLE, lStyle);
-
-            // Maximize window and put window on top
-            SetWindowPos(hWnd, HWND_TOP, 0, 0, DesktopDimensions.first, DesktopDimensions.second, NULL);
-
-            // Set window focus
-            SetFocus(hWnd);
-        }
-    }
-
-    return windowLong;
 }
 
 void Resolution()
@@ -813,8 +825,8 @@ BOOL APIENTRY DllMain(HMODULE hModule,
     {
     case DLL_PROCESS_ATTACH:
     {
+        thisModule = hModule;
         HANDLE mainHandle = CreateThread(NULL, 0, Main, 0, NULL, 0);
-
         if (mainHandle)
         {
             CloseHandle(mainHandle);
