@@ -119,6 +119,7 @@ void ReadConfig()
     inipp::get_value(ini.sections["Custom Resolution"], "Width", iCustomResX);
     inipp::get_value(ini.sections["Custom Resolution"], "Height", iCustomResY);
     inipp::get_value(ini.sections["Custom Resolution"], "Borderless", bBorderlessMode);
+    inipp::get_value(ini.sections["Skip Intro"], "Enabled", bIntroSkip);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Fix Shadow Buffer Bug"], "Enabled", bFixShadowBug);
@@ -128,6 +129,7 @@ void ReadConfig()
     spdlog::info("Config Parse: iCustomResX: {}", iCustomResX);
     spdlog::info("Config Parse: iCustomResY: {}", iCustomResY);
     spdlog::info("Config Parse: bBorderlessMode: {}", bBorderlessMode);
+    spdlog::info("Config Parse: bIntroSkip: {}", bIntroSkip);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     spdlog::info("Config Parse: bFixShadowBug: {}", bFixShadowBug);
@@ -204,23 +206,26 @@ LONG WINAPI SetWindowLongA_hooked(HWND hWnd, int nIndex, LONG dwNewLong)
 
 void IntroSkip()
 {
-    // Intro Skip
-    uint8_t* IntroSkipScanResult = Memory::PatternScan(baseModule, "89 ?? ?? 48 89 ?? ?? 88 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ??") + 0x7;
-    if (IntroSkipScanResult)
+    if (bIntroSkip)
     {
-        spdlog::info("Intro Skip: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)IntroSkipScanResult - (uintptr_t)baseModule);
+        // Intro Skip
+        uint8_t* IntroSkipScanResult = Memory::PatternScan(baseModule, "89 ?? ?? 48 89 ?? ?? 88 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ??") + 0x7;
+        if (IntroSkipScanResult)
+        {
+            spdlog::info("Intro Skip: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)IntroSkipScanResult - (uintptr_t)baseModule);
 
-        // Skip intro logos
-        static SafetyHookMid IntroSkipMidHook{};
-        IntroSkipMidHook = safetyhook::create_mid(IntroSkipScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                ctx.rdx = 1;
-            });
-    }
-    else if (!IntroSkipScanResult)
-    {
-        spdlog::error("Intro Skip: Pattern scan failed.");
+            // Skip intro logos
+            static SafetyHookMid IntroSkipMidHook{};
+            IntroSkipMidHook = safetyhook::create_mid(IntroSkipScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    ctx.rdx = 1;
+                });
+        }
+        else if (!IntroSkipScanResult)
+        {
+            spdlog::error("Intro Skip: Pattern scan failed.");
+        }
     }
 }
 
