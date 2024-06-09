@@ -29,6 +29,7 @@ bool bIntroSkip;
 bool bFixHUD;
 bool bFixFOV;
 bool bFixShadowBug;
+bool bShadowDrawDistance;
 
 // Aspect ratio + HUD stuff
 float fPi = (float)3.141592653;
@@ -43,7 +44,6 @@ float fHUDWidthOffset;
 float fHUDHeightOffset;
 
 // Variables
-const char* sWindowClassName = "AskaWnd";
 uintptr_t BattleMarkerRightValue;
 uintptr_t BattleMarkerFlipValue;
 float fCurrentFrametime = 0.0166667f;
@@ -123,6 +123,7 @@ void ReadConfig()
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
     inipp::get_value(ini.sections["Fix Shadow Buffer Bug"], "Enabled", bFixShadowBug);
+    inipp::get_value(ini.sections["Increase Shadow Draw Distance"], "Enabled", bShadowDrawDistance);
 
     // Log config parse
     spdlog::info("Config Parse: bCustomRes: {}", bCustomRes);
@@ -133,6 +134,7 @@ void ReadConfig()
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
     spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     spdlog::info("Config Parse: bFixShadowBug: {}", bFixShadowBug);
+    spdlog::info("Config Parse: bShadowDrawDistance: {}", bShadowDrawDistance);
     spdlog::info("----------");
 
     // Calculate aspect ratio / use desktop res instead
@@ -179,12 +181,8 @@ void ReadConfig()
 SafetyHookInline SetWindowLongA_hook{};
 LONG WINAPI SetWindowLongA_hooked(HWND hWnd, int nIndex, LONG dwNewLong)
 {
-    // Get window class name
-    char windowClassName[256];
-    GetClassNameA(hWnd, windowClassName, sizeof(windowClassName));
-
     // Check if game is in windowed mode and that the class name is correct.
-    if (iWindowMode == 0 && !strcmp(windowClassName, sWindowClassName) && bBorderlessMode)
+    if (iWindowMode == 0 && bBorderlessMode)
     {
         // Get window style
         LONG lStyle = GetWindowLong(hWnd, GWL_STYLE);
@@ -718,96 +716,31 @@ void Graphics()
             spdlog::error("Shadow Resolution Bug: Pattern scan failed.");
         }
     }
+    
+    if (bShadowDrawDistance)
+    {
+        // Shadow Draw Distance
+        uint8_t* ShadowDistanceScanResult = Memory::PatternScan(baseModule, "0F ?? ?? ?? ?? ?? ?? 48 ?? ?? 04 48 ?? ?? 41 ?? ?? 44 ?? ?? ??");
+        if (ShadowDistanceScanResult)
+        {
+            spdlog::info("ShadowDistance: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)ShadowDistanceScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid ShadowDistanceMidHook{};
+            ShadowDistanceMidHook = safetyhook::create_mid(ShadowDistanceScanResult,
+                [](SafetyHookContext& ctx)
+                {
+                    if (ctx.rbx + 0x120)
+                    {
+                        *reinterpret_cast<float*>(ctx.rbx + 0x120) = 24000.00f; // 4x Shadow draw distance. Default = 6000. 
+                    }
+                });
+        }
+        else if (!ShadowDistanceScanResult)
+        {
+            spdlog::error("ShadowDistance: Pattern scan failed.");
+        }
+    }   
 }
-
-/*
-void FPSCap()
-{
-    // Current frametime
-    uint8_t* CurrentFrametimeScanResult = Memory::PatternScan(baseModule, "F2 0F ?? ?? 89 ?? ?? ?? ?? ?? ?? 48 8B ?? ?? ?? 48 83 ?? ?? 5F C3");
-    if (CurrentFrametimeScanResult)
-    {
-        spdlog::info("CurrentFrametime: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrentFrametimeScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid CurrentFrametimeMidHook{};
-        CurrentFrametimeMidHook = safetyhook::create_mid(CurrentFrametimeScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                // TODO                
-            });
-    }
-    else if (!CurrentFrametimeScanResult)
-    {
-        spdlog::error("CurrentFrametime: Pattern scan failed.");
-    }
-
-    // FPS Cap
-    uint8_t* FPSCapScanResult = Memory::PatternScan(baseModule, "48 ?? ?? ?? ?? ?? ?? 48 8D ?? ?? 00 00 00 00 48 89 ?? ?? ?? ?? ?? 48 8D ?? ?? ?? FF 15 ?? ?? ?? ??");
-    if (FPSCapScanResult)
-    {
-        spdlog::info("FPSCap: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FPSCapScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid FPSCapMidHook{};
-        FPSCapMidHook = safetyhook::create_mid(FPSCapScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                // Set 240fps cap
-                ctx.rax = 41666; // 166667
-            });
-    }
-    else if (!FPSCapScanResult)
-    {
-        spdlog::error("FPSCap: Pattern scan failed.");
-    }
-
-    // Game Speed
-    uint8_t* GameSpeedScanResult = Memory::PatternScan(baseModule, "E8 ?? ?? ?? ?? F3 0F ?? ?? 0F 28 ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? 0F 28 ?? ?? ??");
-    uint8_t* GameSpeedIntScanResult = Memory::PatternScan(baseModule, "B8 3C 00 00 00 F7 ?? ?? ?? ?? ?? 41 ?? ??") + 0x12;
-    if (GameSpeedScanResult && GameSpeedIntScanResult)
-    {
-        spdlog::info("GameSpeed: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameSpeedScanResult - (uintptr_t)baseModule);
-        uintptr_t GameSpeedFuncAddr = Memory::GetAbsolute((uintptr_t)GameSpeedScanResult + 0x1);
-        spdlog::info("GameSpeed: Function address is {:s}+{:x}", sExeName.c_str(), GameSpeedFuncAddr - (uintptr_t)baseModule);
-        spdlog::info("GameSpeed Int: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)GameSpeedIntScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid GameSpeedMidHook{};
-        GameSpeedMidHook = safetyhook::create_mid(GameSpeedFuncAddr + 0x8,
-            [](SafetyHookContext& ctx)
-            {
-                ctx.xmm0.f32[0] = 1.00f / fCurrentFrametime; // Current FPS
-            });
-
-        static SafetyHookMid GameSpeedIntMidHook{};
-        GameSpeedIntMidHook = safetyhook::create_mid(GameSpeedIntScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                ctx.r8 = 1;
-            });
-    }
-    else if (!GameSpeedScanResult || !GameSpeedIntScanResult)
-    {
-        spdlog::error("GameSpeed: Pattern scan failed.");
-    }
-
-    // Combat Speed
-    uint8_t* CombatSpeedScanResult = Memory::PatternScan(baseModule, "0F ?? ?? F3 0F ?? ?? ?? 0F ?? ?? 48 ?? ?? ?? F2 ?? ?? ?? ?? ?? ??") + 0x3;
-    if (CombatSpeedScanResult)
-    {
-        spdlog::info("CombatSpeed: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CombatSpeedScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid CombatSpeedMidHook{};
-        CombatSpeedMidHook = safetyhook::create_mid(CombatSpeedScanResult,
-            [](SafetyHookContext& ctx)
-            {
-                ctx.xmm1.f32[0] = 60.00f / (1.00f / fCurrentFrametime);
-            });
-    }
-    else if (!CombatSpeedScanResult)
-    {
-        spdlog::error("CombatSpeed: Pattern scan failed.");
-    }
-}
-*/
 
 DWORD __stdcall Main(void*)
 {
