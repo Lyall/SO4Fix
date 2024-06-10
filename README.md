@@ -12,6 +12,7 @@ This is a fix that adds custom resolutions, ultrawide support and more to STAR O
 - Fixes many HUD issues at non-16:9 aspect ratios.
 - Skip intro logos.
 - Fixes bug with 4x shadow buffer option.
+- Increase shadow draw distance.
 
 ## Installation
 - Grab the latest release of SO4Fix from [here.](https://github.com/Lyall/SO4Fix/releases)
