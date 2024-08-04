@@ -12,7 +12,7 @@ HMODULE thisModule;
 inipp::Ini<char> ini;
 std::shared_ptr<spdlog::logger> logger;
 std::string sFixName = "SO4Fix";
-std::string sFixVer = "0.9.0";
+std::string sFixVer = "0.9.1";
 std::string sLogFile = "SO4Fix.log";
 std::string sConfigFile = "SO4Fix.ini";
 std::string sExeName;
@@ -207,14 +207,14 @@ void IntroSkip()
     if (bIntroSkip)
     {
         // Intro Skip
-        uint8_t* IntroSkipScanResult = Memory::PatternScan(baseModule, "89 ?? ?? 48 89 ?? ?? 88 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ??") + 0x7;
+        uint8_t* IntroSkipScanResult = Memory::PatternScan(baseModule, "89 ?? ?? 48 89 ?? ?? 88 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ?? 48 89 ?? ??");
         if (IntroSkipScanResult)
         {
             spdlog::info("Intro Skip: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)IntroSkipScanResult - (uintptr_t)baseModule);
 
             // Skip intro logos
             static SafetyHookMid IntroSkipMidHook{};
-            IntroSkipMidHook = safetyhook::create_mid(IntroSkipScanResult,
+            IntroSkipMidHook = safetyhook::create_mid(IntroSkipScanResult + 0x7,
                 [](SafetyHookContext& ctx)
                 {
                     ctx.rdx = 1;
@@ -262,13 +262,13 @@ void Resolution()
         if (bBorderlessMode)
         {
             // Get window mode.
-            uint8_t* WindowedModeScanResult = Memory::PatternScan(baseModule, "E8 ?? ?? ?? ?? 48 ?? ?? F6 ?? 1B ?? 83 ?? 02") + 0x5;
+            uint8_t* WindowedModeScanResult = Memory::PatternScan(baseModule, "E8 ?? ?? ?? ?? 48 ?? ?? F6 ?? 1B ?? 83 ?? 02");
             if (WindowedModeScanResult)
             {
                 spdlog::info("Windowed Mode: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)WindowedModeScanResult - (uintptr_t)baseModule);
 
                 static SafetyHookMid WindowedModeMidHook{};
-                WindowedModeMidHook = safetyhook::create_mid(WindowedModeScanResult,
+                WindowedModeMidHook = safetyhook::create_mid(WindowedModeScanResult + 0x5,
                     [](SafetyHookContext& ctx)
                     {
                         // Grab window mode
@@ -291,13 +291,13 @@ void HUD()
     if (bFixHUD)
     {
         // HUD Width
-        uint8_t* HUDWidthScanResult = Memory::PatternScan(baseModule, "0F B7 ?? ?? 66 0F ?? ?? 0F 5B ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? 75 ?? 48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??") + 0xB;
+        uint8_t* HUDWidthScanResult = Memory::PatternScan(baseModule, "0F B7 ?? ?? 66 0F ?? ?? 0F 5B ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? 75 ?? 48 ?? ?? E8 ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ??");
         if (HUDWidthScanResult)
         {
             spdlog::info("HUD: HUD Width: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDWidthScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid HUDWidthMidHook{};
-            HUDWidthMidHook = safetyhook::create_mid(HUDWidthScanResult,
+            HUDWidthMidHook = safetyhook::create_mid(HUDWidthScanResult + 0xB,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -346,13 +346,13 @@ void HUD()
         }
 
         // 2D Scissoring
-        uint8_t* HUDScissorScanResult = Memory::PatternScan(baseModule, "0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ?? F3 0F ?? ?? 0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ??") - 0x3;
+        uint8_t* HUDScissorScanResult = Memory::PatternScan(baseModule, "0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ?? F3 0F ?? ?? 0F 28 ?? F3 0F ?? ?? F3 41 ?? ?? ??");
         if (HUDScissorScanResult)
         {
             spdlog::info("HUD: HUD Scissor: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HUDScissorScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid HUDScissorMidHook{};
-            HUDScissorMidHook = safetyhook::create_mid(HUDScissorScanResult,
+            HUDScissorMidHook = safetyhook::create_mid(HUDScissorScanResult - 0x3,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -438,13 +438,13 @@ void HUD()
         }
 
         // Fades
-        uint8_t* FadesScanResult = Memory::PatternScan(baseModule, "0F 57 ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? C7 ?? ?? ?? ?? ?? 00 00 80 3F") + 0x7;
+        uint8_t* FadesScanResult = Memory::PatternScan(baseModule, "0F 57 ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? ?? ?? ?? ?? C7 ?? ?? ?? ?? ?? 00 00 80 3F");
         if (FadesScanResult)
         {
             spdlog::info("HUD: Fades: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FadesScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid FadesMidHook{};
-            FadesMidHook = safetyhook::create_mid(FadesScanResult,
+            FadesMidHook = safetyhook::create_mid(FadesScanResult + 0x7,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -463,7 +463,7 @@ void HUD()
                 });
 
             static SafetyHookMid FadesSizeMidHook{};
-            FadesSizeMidHook = safetyhook::create_mid(FadesScanResult + 0x70, // Big gap but this game ain't getting updates, so who cares?
+            FadesSizeMidHook = safetyhook::create_mid(FadesScanResult + 0x77, // Big gap but this game ain't getting updates, so who cares?
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -509,14 +509,14 @@ void HUD()
         }
 
         // Markers (e.g. target markers, main menu cursor)
-        uint8_t* MarkersScanResult = Memory::PatternScan(baseModule, "0F 5B ?? F3 0F ?? ?? F3 0F ?? ?? 0F 28 ?? 0F 28 ?? F3 0F ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? ??") + 0x3;
+        uint8_t* MarkersScanResult = Memory::PatternScan(baseModule, "0F 5B ?? F3 0F ?? ?? F3 0F ?? ?? 0F 28 ?? 0F 28 ?? F3 0F ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? ??");
         if (MarkersScanResult)
         {
             spdlog::info("HUD: Markers: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MarkersScanResult - (uintptr_t)baseModule);
 
             // >16:9
             static SafetyHookMid MarkersWidth1MidHook{};
-            MarkersWidth1MidHook = safetyhook::create_mid(MarkersScanResult,
+            MarkersWidth1MidHook = safetyhook::create_mid(MarkersScanResult + 0x3,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -526,7 +526,7 @@ void HUD()
                 });
 
             static SafetyHookMid MarkersWidth2MidHook{};
-            MarkersWidth2MidHook = safetyhook::create_mid(MarkersScanResult + 0x6C,
+            MarkersWidth2MidHook = safetyhook::create_mid(MarkersScanResult + 0x6F,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -536,7 +536,7 @@ void HUD()
                 });
 
             static SafetyHookMid MarkersOffsetMidHook{};
-            MarkersOffsetMidHook = safetyhook::create_mid(MarkersScanResult + 0x1C,
+            MarkersOffsetMidHook = safetyhook::create_mid(MarkersScanResult + 0x1F,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio > fNativeAspect)
@@ -547,7 +547,7 @@ void HUD()
 
             // <16:9
             static SafetyHookMid MarkersNarrow1MidHook{};
-            MarkersNarrow1MidHook = safetyhook::create_mid(MarkersScanResult + 0x41,
+            MarkersNarrow1MidHook = safetyhook::create_mid(MarkersScanResult + 0x44,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio < 1.60f)
@@ -557,7 +557,7 @@ void HUD()
                 });
 
             static SafetyHookMid MarkersNarrow2MidHook{};
-            MarkersNarrow2MidHook = safetyhook::create_mid(MarkersScanResult + 0x4D,
+            MarkersNarrow2MidHook = safetyhook::create_mid(MarkersScanResult + 0x50,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio < 1.60f)
@@ -632,13 +632,13 @@ void HUD()
         }
 
         // Movies
-        uint8_t* MovieTextureScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? F3 0F ?? ?? F3 41 ?? ?? ?? 44 0F ?? ?? ?? ?? 0F 28 ??") + 0x5;
+        uint8_t* MovieTextureScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? F3 0F ?? ?? F3 41 ?? ?? ?? 44 0F ?? ?? ?? ?? 0F 28 ??");
         if (MovieTextureScanResult)
         {
             spdlog::info("HUD: Movie: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)MovieTextureScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid MovieTextureMidHook{};
-            MovieTextureMidHook = safetyhook::create_mid(MovieTextureScanResult,
+            MovieTextureMidHook = safetyhook::create_mid(MovieTextureScanResult + 0x5,
                 [](SafetyHookContext& ctx)
                 {
                     if (ctx.rbx)
@@ -654,7 +654,7 @@ void HUD()
                 });
 
             static SafetyHookMid MovieTextureNarrowMidHook{};
-            MovieTextureNarrowMidHook = safetyhook::create_mid(MovieTextureScanResult - 0x8C,
+            MovieTextureNarrowMidHook = safetyhook::create_mid(MovieTextureScanResult - 0x87,
                 [](SafetyHookContext& ctx)
                 {
                     if (fAspectRatio < 1.60f)
