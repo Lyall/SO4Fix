@@ -29,6 +29,8 @@ This is a fix that adds custom resolutions, ultrawide support and more to STAR O
 Please report any issues you see.
 This list will contain bugs which may or may not be fixed.
 
+- If borderless mode isn't working, try setting the game to windowed mode and restarting the game, or toggle between windowed and fullscreen modes until borderless mode activates. ([#2](https://github.com/Lyall/SO4Fix/issues/2))
+
 ## Screenshots
 
 | ![ezgif-5-d5b03862da](https://github.com/Lyall/SO4Fix/assets/695941/92d7ed94-cc13-4ebe-9d0a-b48d9ac1748d) |
